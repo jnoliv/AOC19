@@ -1,0 +1,1 @@
+This repository contains Haskell programs to solve 2019's Advent of Code.
