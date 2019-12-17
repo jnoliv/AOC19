@@ -1,4 +1,4 @@
-module Intcode (Program, toProgram, process) where
+module Intcode (Program, toProgram, process, setAt) where
 
 import Data.List
 import Data.List.Split
