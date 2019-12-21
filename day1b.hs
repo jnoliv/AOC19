@@ -1,14 +1,13 @@
+calcFuel :: Integral a => a -> a
+calcFuel = flip (-) 2 . flip div 3
+
+calcWithFuel :: Integral a => a -> a
+calcWithFuel = sum . takeWhile (> 0) . tail . iterate calcFuel
+
+main :: IO ()
 main = do
     contents <- getContents
-    let masses = map (read :: String -> Int) . lines $ contents
-    print(sum . (map calcTotalFuel) $ masses)
+    let masses = map read . lines $ contents
 
-calcFuel :: Int -> Int
-calcFuel mass = (mass `div` 3) - 2
-
-calcTotalFuel :: Int -> Int
-calcTotalFuel mass =
-    let fuel = calcFuel mass in
-        if fuel <= 0
-            then 0
-            else fuel + (calcTotalFuel fuel)
+    let totalFuel = sum . map calcWithFuel $ masses
+    print totalFuel
