@@ -1,7 +1,10 @@
+calcFuel :: Integral a => a -> a
+calcFuel = flip (-) 2 . flip div 3
+
+main :: IO ()
 main = do
     contents <- getContents
-    let masses = map (read :: String -> Int) . lines $ contents
-    print(sum . (map calcFuel) $ masses)
+    let masses = map read . lines $ contents
 
-calcFuel :: Int -> Int
-calcFuel mass = (mass `div` 3) - 2
+    let totalFuel = sum . map calcFuel $ masses
+    print totalFuel
