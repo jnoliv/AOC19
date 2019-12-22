@@ -1,30 +1,20 @@
-main = do
-    contents <- getContents
-    let codes = map (read :: String -> Int) . split $ contents
-    let alteredCodes = setAt 2 2 (setAt 1 12 codes)
-    print . process $ alteredCodes
+import Data.List.Split (splitOn)
 
-split :: String -> [String]
-split l = splitAux ',' l []
+type Program = [Int]
 
-splitAux :: Char -> String -> String -> [String]
-splitAux del [] cur = [cur]
-splitAux del (x:xs) cur =
-    if x == del
-        then cur : splitAux del xs []
-        else splitAux del xs (cur ++ [x])
+toProgram :: String -> Program
+toProgram = map read . splitOn ","
 
 setAt :: Int -> a -> [a] -> [a]
-setAt pos val l = (take pos l) ++ (val : drop (pos + 1) l)
+setAt pos val l = take pos l ++ [val] ++ drop (pos + 1) l
 
 getAt :: Int -> [a] -> a
-getAt 0 l = head l
-getAt n l = head (drop n l)
+getAt pos = head . drop pos
 
-process :: [Int] -> Int
+process :: Program -> Int
 process l = processAux 0 l
 
-processAux :: Int -> [Int] -> Int
+processAux :: Int -> Program -> Int
 processAux ind l =
     let opcode = getAt ind l
         in1 = getAt (getAt (ind + 1) l) l
@@ -35,3 +25,10 @@ processAux ind l =
             1 -> processAux (ind + 4) $ setAt out (in1 + in2) l
             2 -> processAux (ind + 4) $ setAt out (in1 * in2) l
             99 -> head l
+
+main :: IO ()
+main = do
+    contents <- getContents
+
+    let codes = setAt 1 12 . setAt 2 2 . toProgram $ contents
+    print $ process codes
