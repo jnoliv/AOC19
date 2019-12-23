@@ -1,3 +1,4 @@
+import Data.List (find)
 import Data.List.Split (splitOn)
 
 type Program = [Int]
@@ -26,9 +27,23 @@ processAux ind l =
             2 -> processAux (ind + 4) $ setAt out (in1 * in2) l
             99 -> head l
 
-main :: IO ()
+tryAll :: Program -> Int -> (Int, Int)
+tryAll prog val =
+    dropLast $ find (\(_,_,v) -> val == v) [(n, v, process' n v) | n <- [0..99], v <- [0..99]]
+    where
+        process' n v = process . setAt 1 n . setAt 2 v $ prog
+        dropLast (Just (n,v,_)) = (n,v)
+        dropLast Nothing = (-1, -1)
+
+main:: IO ()
 main = do
     contents <- getContents
+    let prog = toProgram $ contents
 
-    let codes = setAt 1 12 . setAt 2 2 . toProgram $ contents
-    print $ process codes
+    let output1 = process . setAt 1 12 . setAt 2 2 $ prog
+
+    let (noun, verb) = tryAll prog 19690720
+    let output2 = 100 * noun + verb
+
+    putStrLn $ "Part1: " ++ show output1
+    putStrLn $ "Part2: " ++ show output2 
