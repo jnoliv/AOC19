@@ -1,6 +1,6 @@
-import Data.Char
-import Data.List
-import Data.List.Split
+import Data.Char (digitToInt)
+import Data.List (sort, group)
+import Data.List.Split (splitOn)
 
 main = do
     contents <- getContents

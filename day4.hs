@@ -1,5 +1,5 @@
-import Data.Char
-import Data.List.Split
+import Data.Char (digitToInt)
+import Data.List.Split (splitOn)
 
 main = do
     contents <- getContents
