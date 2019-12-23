@@ -1,82 +1,59 @@
-type MyPoint = (Int, Int, Int)
+import Data.List.Split (splitOn)
+import Data.Maybe (fromMaybe)
+import qualified Data.Set as Set
 
-main = do
-    contents <- getContents
-    let ls = lines contents
-    let l1 = map toDir . split $ (head ls)
-    let l2 = map toDir . split $ (head (drop 1 ls))
-    let ints = mySetIntersection (pointsSet l1) (pointsSet l2)
-    let dists = map distance ints
-    print (minimum dists)
+data Point = P (Int, Int) Int -- (x,y) traveled_length
+type PointSet = Set.Set Point
 
+instance Eq Point where
+    (P c1 _) == (P c2 _) = c1 == c2
 
-split :: String -> [String]
-split l = splitAux ',' l []
+instance Ord Point where
+    compare (P c1 _) (P c2 _) = compare c1 c2
 
-splitAux :: Char -> String -> String -> [String]
-splitAux del [] cur = [cur]
-splitAux del (x:xs) cur =
-    if x == del
-        then cur : splitAux del xs []
-        else splitAux del xs (cur ++ [x])
+add :: Point -> Point -> Point
+(P (x1,y1) l1) `add` (P (x2,y2) l2) = P (x1 + x2, y1 + y2) (l1 + l2)
+
+mult :: Int -> Point -> Point
+n `mult` (P (x,y) l) = P (n * x, n * y) (n * l)
+
+dist :: Point -> Int
+dist (P _ l) = l
+
 
 toDir :: String -> (Char, Int)
 toDir (dir:count) = (dir, read count)
 
-pointsSet :: [(Char, Int)] -> [MyPoint]
-pointsSet points = pointsSetAux (0,0,0) points []
+pointsSet :: [(Char, Int)] -> PointSet
+pointsSet points = pointsSet' (P (0,0) 0) points
 
+pointsSet' :: Point -> [(Char, Int)] -> PointSet
+pointsSet' curPoint [] = Set.empty
+pointsSet' curPoint (dir:dirs) = 
+    let len = snd dir
+        pDir = case fst dir of
+            'U' -> P (0, 1) 1
+            'R' -> P (1, 0) 1
+            'D' -> P (0, -1) 1
+            'L' -> P (-1, 0) 1
+        nextPoint = curPoint `add` (len `mult` pDir)
+        newPoints = Set.fromList $ map (add curPoint) [n `mult` pDir | n <- [0..(len - 1)]]
+    in Set.union newPoints $ pointsSet' nextPoint dirs
 
-pointsSetAux :: MyPoint -> [(Char, Int)] -> [MyPoint] -> [MyPoint]
-pointsSetAux curPoint [] res = res
-pointsSetAux curPoint (point:points) res = 
-    let len = snd point
-        dir = case fst point of
-            'U' -> (0, 1, 1)
-            'R' -> (1, 0, 1)
-            'D' -> (0, -1, 1)
-            'L' -> (-1, 0, 1)
-        nextPoint = addToPoint curPoint $ multPoint dir len
-        nextSet = addPoints curPoint dir len res
-    in pointsSetAux nextPoint points nextSet
+toIntersectionList :: PointSet -> PointSet -> PointSet -> [Point]
+toIntersectionList set1 set2 intersec =
+    let getPoint set point = fromMaybe (P (0,0) 0) $ Set.lookupLE point set 
+        totalSteps (P c _) = P c $ dist (getPoint set1 (P c 0)) + dist (getPoint set2 (P c 0))
+    in Set.toList $ Set.map totalSteps $ Set.delete (P (0,0) 0) intersec
 
-multPoint :: MyPoint -> Int -> MyPoint
-multPoint (x, y, s) n = (x * n, y * n, s * n)
+main :: IO ()
+main = do
+    contents <- getContents
 
-addPoints :: MyPoint -> MyPoint -> Int -> [MyPoint] -> [MyPoint]
-addPoints curPoint dir 0 set = set
-addPoints curPoint dir count set = 
-    let newPoint = addToPoint curPoint (multPoint dir count)
-    in addPoints curPoint dir (count - 1) (mySetInsert set newPoint)
+    let ls = map (map toDir . splitOn ",") $ lines contents
 
-addToPoint :: MyPoint -> MyPoint -> MyPoint
-addToPoint (x1, y1, s1) (x2, y2, s2) = (x1 + x2, y1 + y2, s1 + s2)
+    let [set1,set2] = map pointsSet ls
+    let ints = toIntersectionList set1 set2 $ Set.intersection set1 set2
+    let minDist = minimum $ map dist ints
 
-distance :: MyPoint -> Int
-distance (x, y, s) = s
-
-mySetInsert :: [MyPoint] -> MyPoint -> [MyPoint]
-mySetInsert set point =
-    case mySetFind set point of
-        Just point -> set
-        Nothing -> set ++ [point]
-
-mySetFind :: [MyPoint] -> MyPoint -> Maybe MyPoint
-mySetFind [] point = Nothing
-mySetFind (p:ps) (x1,y1,s1) =
-    let (x2,y2,s2) = p
-    in if (x1 == x2) && (y1 == y2)
-        then Just p
-        else mySetFind ps (x1,y1,s1)
-
-mySetIntersection :: [MyPoint] -> [MyPoint] -> [MyPoint]
-mySetIntersection s1 s2 = mySetIntersectionAux s1 s2 []
-
-mySetIntersectionAux :: [MyPoint] -> [MyPoint] -> [MyPoint] -> [MyPoint]
-mySetIntersectionAux [] s2 res = res
-mySetIntersectionAux (p:s1s) set2 res =
-    let (x1,y1,s1) = p
-        pointS2 = mySetFind set2 p
-    in case pointS2 of
-        Just (x2,y2,s2) -> mySetIntersectionAux s1s set2 (res ++ [(x1,y1, s1 + s2)])
-        Nothing -> mySetIntersectionAux s1s set2 res
+    print minDist
