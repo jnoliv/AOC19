@@ -1,67 +1,78 @@
-type Vector = (Int, Int)
-data NormVector = NormVector Int (Int,Int)
+import Data.List (elemIndex, sort)
+import Data.Maybe (fromJust)
+import qualified Data.Set as Set
 
-instance Show NormVector where
-    show (NormVector norm (x,y)) = show norm ++ "(" ++ show x ++ "," ++ show y ++ ")"
+type Vector = (Int, Int) -- (y,x)
+data NormVector = NormVector Int Vector Float deriving (Show)
 
-main = do
-    contents <- getContents
-    let astL = toAstList $ words contents
-    print . maximum . map (countUnobstructed astL) $ astL
+instance Eq NormVector where
+    (NormVector _ _ a1) == (NormVector _ _ a2) = a1 == a2
 
-toAstList :: [String] -> [Vector]
-toAstList lines = toAstListAux 0 lines
+instance Ord NormVector where
+    (NormVector n1 _ a1) <= (NormVector n2 _ a2) =
+        if a1 == a2
+            then n1 <= n2
+            else a1 <= a2
 
-toAstListAux :: Int -> [String] -> [Vector]
-toAstListAux _ [] = []
-toAstListAux i (line:lines) = (parseLine 0 i line) ++ (toAstListAux (i + 1) lines)
-
-parseLine :: Int -> Int -> String -> [Vector]
-parseLine _ _ [] = []
-parseLine i j (a:as) = case a of
-    '#' -> (i,j):(parseLine (i + 1) j as)
-    '.' -> parseLine (i + 1) j as
+negateVector :: Vector -> Vector
+negateVector (y,x) = (-y, -x)
 
 changeReferential :: Vector -> [Vector] -> [Vector]
-changeReferential (newX, newY) vectors =
-    map (\(x,y) -> (x - newX, y - newY)) vectors
+changeReferential (newY, newX) vectors =
+    map (\(y,x) -> (y - newY, x - newX)) vectors
 
 normalizeVector :: Vector -> NormVector
-normalizeVector (i,j) =
-    let norm = gcd i j 
-    in if norm == 0
-        then NormVector 0 (0,0)
-        else NormVector norm (i `div` norm, j `div` norm)
+normalizeVector (y,x) =
+    let gcdNorm = gcd y x
+        normedX = x `div` gcdNorm
+        normedY = y `div` gcdNorm
+        floatY = fromIntegral normedY :: Float
+        norm = sqrt $ (fromIntegral normedX ^ 2) + (floatY ^ 2)
+        angle = acos $ (-floatY) / norm
+        correctedAngle = if x < 0 then 2 * pi - angle else angle
+    in if gcdNorm == 0
+        then NormVector 0 (0,0) 0
+        else NormVector gcdNorm (normedY, normedX) correctedAngle
 
-removeObstructed :: [NormVector] -> [NormVector] -> [NormVector]
-removeObstructed [] out = out
-removeObstructed (l:ls) out = 
-    let NormVector norm (x,y) = l
-    in removeObstructed ls $ case (find l out) of
-        Nothing -> out ++ [l]
-        Just (NormVector norm2 _) -> 
-            if norm2 < norm
-                then out
-                else replace (NormVector norm (x,y)) out
-
-find :: NormVector -> [NormVector] -> Maybe NormVector
-find _ [] = Nothing
-find (NormVector norm (x,y)) (NormVector norm2 (x2,y2) : ls) =
-    --let areClose a b = (abs (a - b)) < 0.000000000000000000000000000000001
-    --in if (areClose x x2) && (areClose y y2)
-    if (x == x2) && (y == y2)
-        then Just (NormVector norm2 (x2,y2))
-        else find (NormVector norm (x,y)) ls
-
-replace :: NormVector -> [NormVector] -> [NormVector]
-replace v [] = [v]
-replace (NormVector norm (x,y)) (NormVector norm2 (x2,y2) : ls) =
-    if (x == x2) && (y == y2)
-        then (NormVector norm (x,y)) : ls
-        else (NormVector norm2 (x2,y2)) : replace (NormVector norm (x,y)) ls
+deNormalizeVector :: NormVector -> Vector
+deNormalizeVector (NormVector norm (y,x) _) = (y * norm, x * norm)
 
 countUnobstructed :: [Vector] -> Vector -> Int
 countUnobstructed l v = 
     let normalized = map normalizeVector $ changeReferential v l
-        len = length $ removeObstructed normalized []
-    in len - 1 -- disregard self
+        normalized' = tail . sort $ normalized -- remove current ast
+    in Set.size $ foldr Set.insert Set.empty normalized'
+
+toAstList :: [String] -> [Vector]
+toAstList lines =
+    let maxRow = length lines - 1
+        maxCol = length (head lines) - 1
+    in [(y,x) | y <- [0..maxRow], x <- [0..maxCol], lines !! y !! x == '#']
+
+sortByVaped :: Vector -> [Vector] -> [Vector]
+sortByVaped origin astL =
+    let astL' = map normalizeVector $ changeReferential origin astL
+        sorted = sortByVaped' . tail . sort $ astL'
+        deNormed = map deNormalizeVector sorted
+    in changeReferential (negateVector origin) deNormed
+    where
+        sortByVaped' [] = []
+        sortByVaped' (a:as) =
+            let nSame = length $ takeWhile (== a) as
+            in a : sortByVaped' (drop nSame as ++ take nSame as)
+
+main :: IO ()
+main = do
+    contents <- getContents
+
+    let astL = toAstList $ lines contents
+    let unobstructedCounts = map (countUnobstructed astL) astL
+    let maxUnobstructed = maximum unobstructedCounts
+    
+    putStrLn $ "Part1: " ++ show maxUnobstructed
+
+    let bestAstIndex = fromJust $ maxUnobstructed `elemIndex` unobstructedCounts
+    let sortedByVapeOrder = sortByVaped (astL !! bestAstIndex) astL
+    let (y,x) = sortedByVapeOrder !! 199 -- 200th to be vaped is at position 199
+
+    putStrLn $ "Part2: " ++ show (x * 100 + y)
