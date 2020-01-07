@@ -1,73 +1,74 @@
 import Intcode
+import Data.List.Split (chunksOf)
+import qualified Data.Map.Strict as Map
 
-data Direction = Up | Right | Down | Left deriving (Enum)
-data Color = Black | White deriving (Enum)
-data Panel = Panel (Int, Int) Color
+data Direction = Up | Right | Down | Left deriving (Enum, Show)
 
-instance Show Direction where
-    show Main.Up = "Up"
-    show Main.Right = "Right"
-    show Main.Down = "Down"
-    show Main.Left = "Left"
+type Pos = (Int,Int) -- (y,x)
+data Color = Black | White deriving (Enum, Show)
 
-instance Show Color where
-    show Black = "Black"
-    show White = "White"
+type PanelMap = Map.Map Pos Color 
 
-instance Show Panel where
-    show (Panel (x,y) c) =
-        "(" ++ show x ++ "," ++ show y ++ ":" ++ show c ++ ")"
+colorToPrintable :: Color -> Char
+colorToPrintable Black = ' '
+colorToPrintable White = '#'
 
-instance Eq Panel where
-    (==) (Panel (x1,y1) _) (Panel (x2,y2) _) = (x1 == x2) && (y1 == y2)
+turnRight :: Direction -> Direction
+turnRight Main.Left = Main.Up
+turnRight d = succ d
 
-insertPanel :: Panel -> [Panel] -> [Panel]
-insertPanel new [] = [new]
-insertPanel new (p:ps) =
-    if new == p
-        then new : ps
-        else p : insertPanel new ps
+turnLeft :: Direction -> Direction
+turnLeft Main.Up = Main.Left
+turnLeft d = pred d
 
-getPanel :: (Int,Int) -> [Panel] -> Panel
-getPanel (x,y) [] = Panel (x,y) Black
-getPanel (x,y) ((Panel (x2,y2) c):ps) =
-    if x == x2 && y == y2
-        then Panel (x,y) c
-        else getPanel (x,y) ps
+colorToInteger :: Color -> Integer
+colorToInteger = toInteger . fromEnum
 
-panelsToColors :: [Panel] -> [Integer]
-panelsToColors ps = map (\(Panel _ c) -> fromIntegral $ fromEnum c) ps
+integerToColor :: Integer -> Color
+integerToColor = toEnum . fromInteger
 
-removeDups :: [Panel] -> [Panel]
-removeDups [] = []
-removeDups (p:ps) =
-    if p `elem` ps
-        then removeDups ps
-        else p : removeDups ps 
+runHullPaintingRobot :: [Integer] -> Pos -> Direction -> PanelMap -> [(Color, (Pos,Color))]
+runHullPaintingRobot [] _ _ _ = []
+runHullPaintingRobot (newC:d:is) curP@(y,x) curD prevPs =
+    let nextD = if (d == 0) then turnLeft curD else turnRight curD
+        nextCoords = case nextD of
+            Main.Up    -> (y - 1, x)
+            Main.Right -> (y, x + 1)
+            Main.Down  -> (y + 1, x)
+            Main.Left  -> (y, x - 1)
+        nextColor = Map.findWithDefault Black nextCoords prevPs
+        newColor = integerToColor newC
+        nextPs = Map.insert curP newColor prevPs
+    in (nextColor, (curP, newColor)) : runHullPaintingRobot is nextCoords nextD nextPs
+
+paintHull :: Color -> Program -> PanelMap
+paintHull startColor program =
+    let output = runHullPaintingRobot input (0,0) Up $ Map.singleton (0,0) startColor
+        outputColor = map (colorToInteger . fst) output
+        outputPanels = map snd output
+        input = process program $ colorToInteger startColor : outputColor
+    in Map.fromList $ ((0,0), startColor) : init outputPanels
+
+toPrintable :: PanelMap -> String
+toPrintable panels =
+    let pList = Map.toList panels
+        ys = map (fst . fst) pList
+        xs = map (snd . fst) pList
+        (minY, maxY) = (minimum ys, maximum ys)
+        (minX, maxX) = (minimum xs, maximum xs)
+        colors = [Map.findWithDefault Black (y,x) panels | y <- [minY..maxY], x <- [minX..maxX]]
+    in unlines . chunksOf (maxX - minX + 1) . map colorToPrintable $ colors
 
 main :: IO ()
 main = do
     contents <- getContents
-    let program = toProgram contents
-    let panels = paintHull program
-    print . length . removeDups $ panels
 
-runHullPaintingRobot :: [Integer] -> Panel -> Direction -> [Panel] -> [Panel]
-runHullPaintingRobot [] _ _ prevPs = []
-runHullPaintingRobot (newC:d:is) (Panel (x,y) c) curD prevPs =
-    let dirDelta = fromIntegral $ if d == 0 then (-1) else d
-        nextD = toEnum $ ((fromEnum curD) + dirDelta) `mod` 4
-        nextCoords = case nextD of
-            Main.Up    -> (x, y - 1)
-            Main.Right -> (x + 1, y)
-            Main.Down  -> (x, y + 1)
-            Main.Left  -> (x - 1, y)
-        nextP = getPanel nextCoords prevPs
-        changedPanel = Panel (x,y) (toEnum . fromIntegral $ newC)
-        nextPs = insertPanel changedPanel prevPs
-    in nextP : runHullPaintingRobot is nextP nextD nextPs
+    let prog = toProgram contents
+    let numPaintedPanels = Map.size $ paintHull Black prog
 
-paintHull :: Program -> [Panel]
-paintHull program = (Panel (0,0) Black) : init output
-    where output = runHullPaintingRobot input (Panel (0,0) Black) Up []
-          input = process program $ 0 : panelsToColors output
+    putStrLn $ "Part1: " ++ show numPaintedPanels
+
+    let paintedPanels = paintHull White prog
+    let printablePanels = toPrintable paintedPanels
+
+    putStrLn $ "Part2:\n" ++ printablePanels
